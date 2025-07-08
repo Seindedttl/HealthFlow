@@ -296,4 +296,100 @@
     )
 )
 
+;; Generate comprehensive consent and access analytics report for healthcare providers
+;; This function provides detailed analytics for healthcare providers to understand
+;; their data access patterns, consent statuses, and compliance metrics
+(define-public (generate-healthcare-analytics-report 
+    (provider-id principal)
+    (analysis-period-blocks uint)
+    (include-expired-consents bool)
+)
+    (let (
+        (current-block block-height)
+        (analysis-start-block (if (>= current-block analysis-period-blocks) 
+            (- current-block analysis-period-blocks) 
+            u0))
+        (provider-info (unwrap! (map-get? healthcare-providers { provider-id: provider-id }) ERR-PROVIDER-NOT-FOUND))
+        (report-id (var-get next-log-id))
+    )
+        ;; Verify provider is authorized to access analytics
+        (asserts! (or (is-eq tx-sender provider-id) (is-eq tx-sender CONTRACT-OWNER)) ERR-NOT-AUTHORIZED)
+        (asserts! (get is-verified provider-info) ERR-PROVIDER-NOT-VERIFIED)
+        
+        ;; Log analytics access for audit trail
+        (map-set access-logs
+            { log-id: report-id }
+            {
+                consent-id: u0, ;; Special case for analytics reports
+                accessing-provider: tx-sender,
+                access-timestamp: current-block,
+                access-type: "analytics-report",
+                data-categories-accessed: "consent-analytics"
+            }
+        )
+        
+        ;; Increment log counter
+        (var-set next-log-id (+ report-id u1))
+        
+        ;; Generate comprehensive analytics report
+        (let (
+            (total-requests (get total-data-requests provider-info))
+            (organization-name (get organization-name provider-info))
+            (specialization (get specialization provider-info))
+            (verification-status (get is-verified provider-info))
+            (registration-date (get date-registered provider-info))
+        )
+            ;; Create detailed analytics response
+            (print {
+                event: "analytics-report-generated",
+                report-id: report-id,
+                provider-id: provider-id,
+                organization: organization-name,
+                specialization: specialization,
+                analysis-period: analysis-period-blocks,
+                analysis-start-block: analysis-start-block,
+                current-block: current-block,
+                provider-metrics: {
+                    total-data-requests: total-requests,
+                    verification-status: verification-status,
+                    registration-date: registration-date,
+                    days-since-registration: (/ (- current-block registration-date) u144)
+                },
+                platform-statistics: {
+                    total-patients-platform: (var-get total-patients),
+                    total-providers-platform: (var-get total-providers),
+                    next-consent-id: (var-get next-consent-id)
+                },
+                report-metadata: {
+                    generated-by: tx-sender,
+                    generated-at: current-block,
+                    include-expired: include-expired-consents,
+                    report-type: "comprehensive-healthcare-analytics"
+                }
+            })
+            
+            ;; Return structured analytics data
+            (ok {
+                report-id: report-id,
+                provider-analytics: {
+                    organization-name: organization-name,
+                    specialization: specialization,
+                    total-requests: total-requests,
+                    verification-status: verification-status
+                },
+                platform-metrics: {
+                    total-patients: (var-get total-patients),
+                    total-providers: (var-get total-providers),
+                    total-consents-created: (- (var-get next-consent-id) u1)
+                },
+                analysis-period: {
+                    start-block: analysis-start-block,
+                    end-block: current-block,
+                    period-duration: analysis-period-blocks
+                }
+            })
+        )
+    )
+)
+
 
